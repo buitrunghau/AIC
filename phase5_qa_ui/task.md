@@ -57,7 +57,7 @@ Tệp `submission.zip` chứa file CSV chuẩn CodaBench.
     {
       "video_id": "L02_V030",
       "frame_ids": "5120",
-      "answer": "\"59A-123.45\""
+      "answer": "59A-123.45"
     }
   ]
 }

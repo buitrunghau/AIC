@@ -43,6 +43,7 @@ Danh sách đối tượng `RetrievalResult` (Sẽ được Phase 5 đóng gói)
   {
     "video_id": "L01_V025",
     "frame_ids": [1050, 1080, 1120],
+    "answer": null,
     "wrrf_score": 0.942
   }
 ]
