@@ -7,35 +7,36 @@
 ## 1. Trách nhiệm cốt lõi (Core Responsibility)
 
 - Điều phối hai luồng tìm kiếm song song: tìm kiếm theo độ tương đồng vector (trên Milvus) và tìm kiếm theo từ vựng (trên Elasticsearch).
-- Áp dụng thuật toán hợp nhất điểm số để tạo ra bảng xếp hạng Top-K ứng viên.
-- Viết giải thuật quy hoạch động DANTE để căn chỉnh thứ tự thời gian cho các bài toán chuỗi sự kiện nhiều khoảnh khắc.
+- Áp dụng thuật toán hợp nhất điểm số Weighted Reciprocal Rank Fusion (WRRF) để tạo ra bảng xếp hạng Top-K ứng viên.
+- Viết giải thuật quy hoạch động DANTE để căn chỉnh thứ tự thời gian cho các bài toán chuỗi sự kiện nhiều khoảnh khắc (TRAKE).
 
 ## 2. Đầu vào & Đầu ra (Inputs & Outputs)
 
 **Đầu vào (Input):**  
-- Chuỗi văn bản truy vấn \(Q\) (vd: "Người đàn ông chạy đà, giậm nhảy...").
-- Danh sách điểm số thô và `keyframe_id` trả về từ DB Phase 3.
+- Chuỗi văn bản truy vấn \(Q\) (ví dụ: "Người đàn ông chạy đà, giậm nhảy...").
+- Loại truy vấn `query_type`: `"KIS"`, `"Q&A"`, hoặc `"TRAKE"`.
+- Kết quả tra cứu thô từ Milvus và Elasticsearch.
 
-**Ví dụ Input:**
+**Ví dụ Input (Cho truy vấn TRAKE với 3 sự kiện):**
 ```json
 {
   "query": "Người đàn ông chạy đà, giậm nhảy qua xà, và tiếp đất trên nệm.",
   "query_type": "TRAKE",
-  "dense_hits": [
-    {"keyframe_id": "L01_V025_1050", "rank": 1, "score": 0.91},
-    {"keyframe_id": "L01_V025_1080", "rank": 2, "score": 0.89},
-    {"keyframe_id": "L01_V025_1120", "rank": 3, "score": 0.88}
+  "sub_queries": [
+    "chạy đà",
+    "giậm nhảy qua xà",
+    "tiếp đất trên nệm"
   ],
-  "sparse_hits": [
-    {"keyframe_id": "L01_V025_1080", "rank": 1, "score": 13.2},
-    {"keyframe_id": "L01_V025_1050", "rank": 2, "score": 12.7},
-    {"keyframe_id": "L01_V025_1120", "rank": 4, "score": 11.4}
+  "retrieved_candidates_per_event": [
+    {"event_idx": 0, "candidates": [{"video_id": "L01_V025", "frame_idx": 1050, "score": 0.91}]},
+    {"event_idx": 1, "candidates": [{"video_id": "L01_V025", "frame_idx": 1080, "score": 0.89}]},
+    {"event_idx": 2, "candidates": [{"video_id": "L01_V025", "frame_idx": 1120, "score": 0.88}]}
   ]
 }
 ```
 
 **Đầu ra (Output):**  
-Danh sách đối tượng `RetrievalResult` (Sẽ được Phase 5 đóng gói):
+Danh sách đối tượng `RetrievalResult`:
 
 **Ví dụ Output:**
 ```json
@@ -63,13 +64,14 @@ Danh sách đối tượng `RetrievalResult` (Sẽ được Phase 5 đóng gói)
 
 Triển khai thuật toán DANTE (Dynamic Alignment of Narrative Temporal Events):
 
-- **Mã hóa chuỗi:** Cắt câu truy vấn thành \(N\) sự kiện \(U = [u_1, u_2, ..., u_N]\) và chuyển thành vector bằng BEiT-3.
+- **Mã hóa chuỗi:** Cắt câu truy vấn thành \(N\) sự kiện \(U = [u_1, u_2, ..., u_N]\) và chuyển thành vector bằng BEiT-3 / SigLIP2.
 - **Tính ma trận tương đồng:** Viết hàm tính độ tương đồng cosine \(S[i, t] = \text{cosine\_similarity}(u_i, E[t])\) giữa sự kiện \(i\) và vector khung hình \(t\).
 - **Lập bảng DP:** Xây dựng mảng hai chiều \(DP[i, t]\), tính toán điểm tối ưu để khớp sự kiện vào các khung hình. Phải tích hợp một hệ số phạt thời gian \(\lambda\) (penalty factor) trừ điểm nếu 2 khung hình cách nhau quá xa hoặc sai trật tự thời gian.
 - **Quay lui (Backtracking):** Viết vòng lặp dò ngược từ điểm cao nhất của bảng \(DP\) để trích xuất ra đúng một mảng chứa \(N\) phần tử `frame_ids` tăng dần theo thời gian.
 
 ## 4. Danh sách chuyển giao (Deliverables Checklist)
 
-- [ ] `hybrid_search_wrrf.py`: Thuật toán trộn rank 2 luồng kết quả.
-- [ ] `dante_trake_solver.py`: Toàn bộ logic toán học của hệ thống quy hoạch động tính toán chuỗi sự kiện.
-- [ ] `tests/test_retrieval.py`: Test case giả lập \(N=3\), cung cấp 3 vector giả có thứ tự lộn xộn để khẳng định hàm DANTE luôn xuất ra mảng có index lớn dần và loại bỏ được nhiễu.
+- [ ] `hybrid_search_wrrf.py`: Thuật toán trộn rank 2 luồng kết quả (Milvus & ES).
+- [ ] `dante_trake_solver.py`: Logic quy hoạch động tính toán và căn chỉnh chuỗi sự kiện theo thời gian.
+- [ ] `search.py`: Core retriever interface nhận query từ API/UI và trả về `RetrievalResult`.
+- [ ] `tests/test_retrieval.py`: Test case giả lập \(N=3\), cung cấp 3 vector giả có thứ tự lộn xộn để khẳng định hàm DANTE luôn xuất ra mảng có frame index tăng dần và loại bỏ nhiễu.

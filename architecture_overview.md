@@ -17,13 +17,13 @@
 
 ## 1. Tổng quan kiến trúc & Tóm tắt mục tiêu
 
-Hệ thống được thiết kế theo mô hình **Multimodal Hybrid Pipeline**, cho phép xử lý luồng dữ liệu đa phương thức (video, audio, text) một cách tuần tự nhưng có khả năng tìm kiếm kết hợp và suy luận chuỗi thời gian khắt khe.
+Hệ thống được thiết kế theo mô hình **Multimodal Hybrid Pipeline**, cho phép xử lý luồng dữ liệu đa phương thức (video, visual text) một cách tuần tự nhưng có khả năng tìm kiếm kết hợp và suy luận chuỗi thời gian khắt khe.
 
 **Các mục tiêu chính:**
 
-- **Tiền xử lý thông minh:** Loại bỏ khung hình rác, chỉ giữ lại các khung hình có giá trị ngữ nghĩa thực sự thông qua mạng nơ-ron và đo lường khoảng cách vector.
-- **Khai phá đa phương thức:** Chuyển hóa toàn bộ pixel hình ảnh và luồng âm thanh thành vector toán học (dense embeddings) và chuỗi văn bản (OCR, ASR).
-- **Lập chỉ mục siêu tốc:** Xây dựng cơ sở dữ liệu kép để phục vụ tìm kiếm ngữ nghĩa (FAISS/Milvus) và tìm kiếm từ khóa chính xác (Elasticsearch).
+- **Tiền xử lý thông minh:** Loại bỏ khung hình rác, chỉ giữ lại các khung hình có giá trị ngữ nghĩa thực sự thông qua mạng nơ-ron TransNetV2 và đo lường khoảng cách vector pixel (L2).
+- **Khai phá đa phương thức:** Chuyển hóa toàn bộ pixel hình ảnh thành vector toán học (dense embeddings - SigLIP2/BEiT-3) và chuỗi văn bản thị giác (OCR - Qwen2.5-VL).
+- **Lập chỉ mục siêu tốc:** Xây dựng cơ sở dữ liệu kép để phục vụ tìm kiếm ngữ nghĩa (Milvus - HNSW) và tìm kiếm từ khóa chính xác (Elasticsearch - BM25).
 - **Truy xuất & Căn chỉnh thời gian:** Áp dụng quy hoạch động (DANTE) để giải quyết loại câu hỏi chuỗi sự kiện TRAKE, bắt buộc tính toán trật tự thời gian.
 - **Tương tác & Đệ trình tự động:** Triển khai vòng lặp phản hồi Rocchio để tối ưu hóa truy vấn và tự động xuất file `.csv` chuẩn CodaBench.
 
@@ -44,10 +44,10 @@ Hệ thống được thiết kế theo mô hình **Multimodal Hybrid Pipeline**
          ▼
 ┌───────────────────┐
 │ Phase 2: Metadata │  (Member 2 – AI & Metadata Eng)
-│ SigLIP/BEiT-3     │
-│ Qwen2.5-VL, Whisper│
+│ SigLIP2/BEiT-3    │
+│ Qwen2.5-VL (OCR)  │
 └────────┬──────────┘
-         │  List[KeyframeData + Embeddings + Text]
+         │  List[KeyframeData + Embeddings + OCR]
          ▼
 ┌───────────────────┐
 │ Phase 3: Indexing │  (Member 3 – Backend & DB Admin)
@@ -70,7 +70,7 @@ Hệ thống được thiết kế theo mô hình **Multimodal Hybrid Pipeline**
 └────────┬──────────┘
          │
          ▼
- [Final submission.zip]
+  [Final submission.zip]
 ```
 
 ---
@@ -99,12 +99,12 @@ Cắt nhỏ video thô thành các cảnh quay (shots) có tính liên kết và
 
 ### 4.1 Mục tiêu
 
-Nhận các khung hình từ Phase 1 và biến chúng thành các đại diện toán học và văn bản có thể tìm kiếm được.
+Nhận các khung hình từ Phase 1 và biến chúng thành các đại diện toán học (dense vectors) và văn bản thị giác (OCR) có thể tìm kiếm được.
 
 ### 4.2 Luồng xử lý
 
 - **Visual Embeddings:** Dùng SigLIP2 và BEiT-3 mã hóa hình ảnh thành vector đa chiều. Khác với CLIP dùng softmax, SigLIP dùng hàm suy hao sigmoid (sigmoid loss) cho không gian biểu diễn hội tụ tốt hơn.
-- **Text & Speech (OCR/ASR):** Gọi Qwen2.5-VL bóc tách chữ trên video (bảng hiệu, thời sự); dùng Whisper bóc tách lời thoại thành văn bản có gắn nhãn thời gian (timestamped speech-to-text).
+- **Visual Text (OCR):** Gọi Qwen2.5-VL bóc tách chữ trên video (bảng hiệu, dòng chữ thời sự, bảng tên,...).
 
 ---
 
@@ -118,8 +118,8 @@ Lưu trữ toàn bộ dữ liệu từ Phase 2 với kiến trúc tối ưu cho 
 
 ### 5.2 Luồng xử lý
 
-- **Milvus (Dense Vectors):** Nạp vector SigLIP/BEiT-3. Sử dụng đồ thị HNSW để tìm kiếm lân cận gần nhất (ANN) siêu tốc.
-- **Elasticsearch (Sparse/Text):** Nạp dữ liệu OCR/ASR. Chạy thuật toán BM25 kết hợp mô hình nhúng thưa để đối sánh từ vựng chính xác (exact lexical matching).
+- **Milvus (Dense Vectors):** Nạp vector SigLIP2/BEiT-3. Sử dụng đồ thị HNSW để tìm kiếm lân cận gần nhất (ANN) siêu tốc.
+- **Elasticsearch (Sparse/Text):** Nạp dữ liệu văn bản OCR. Chạy thuật toán BM25 kết hợp mô hình nhúng thưa để đối sánh từ vựng chính xác (exact lexical matching).
 
 ---
 
@@ -151,8 +151,8 @@ Quản lý tương tác con người, tinh chỉnh truy vấn và xuất file đ
 
 ### 7.2 Luồng xử lý
 
-- **Relevance Feedback (Rocchio):** Người dùng nhãn Đúng/Sai trực quan. Thuật toán Rocchio sẽ tự động dịch chuyển vector truy vấn \( q_m \) về gần với các kết quả đúng (\( C_r \)) và đẩy ra xa bối cảnh sai (\( C_{nr} \)).
-- **Format Validator:** Code tự động xóa đuôi `.mp4` khỏi ID, bọc ngoặc kép cho Q&A, và gói tệp CSV vào thư mục trung gian `submission` trước khi zip.
+- **Relevance Feedback (Rocchio):** Người dùng gắn nhãn Đúng/Sai trực quan. Thuật toán Rocchio sẽ tự động dịch chuyển vector truy vấn \( q_m \) về gần với các kết quả đúng (\( C_r \)) và đẩy ra xa bối cảnh sai (\( C_{nr} \)).
+- **Format Validator:** Code tự động xóa đuôi `.mp4` khỏi ID (nếu có), bọc ngoặc kép cho Q&A, và gói tệp CSV vào thư mục trung gian `submission` trước khi zip.
 
 ---
 
@@ -230,11 +230,11 @@ Quản lý tương tác con người, tinh chỉnh truy vấn và xuất file đ
 
 ## 9. Giao diện tích hợp giữa các Module
 
-Để 5 thành viên có thể code độc lập, các `TypedDict`/`Dataclass` được định nghĩa nghiêm ngặt.
+Định nghĩa trong `shared_contracts/contracts.py`:
 
 ```python
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 @dataclass
 class KeyframeData:
@@ -243,21 +243,20 @@ class KeyframeData:
     video_id: str
     frame_idx: int
     timestamp_sec: float
-    image_matrix: object      # Numpy array của ảnh
+    image_matrix: Any         # Numpy array hoặc PIL Image
 
 @dataclass
 class MultimodalMetadata:
     """Contract Output Phase 2 -> Input Phase 3"""
     keyframe_id: str
-    dense_vector: List[float] # Từ SigLIP/BEiT-3
+    dense_vector: List[float] # Từ SigLIP2/BEiT-3
     ocr_text: str             # Từ Qwen2.5-VL
-    asr_transcript: str       # Từ Whisper
 
 @dataclass
 class RetrievalResult:
     """Contract Output Phase 4 -> Input Phase 5"""
     video_id: str
-    frame_ids: List[int]      # Sẽ có N phần tử nếu là TRAKE, 1 phần tử nếu KIS
+    frame_ids: List[int]      # Sẽ có N phần tử nếu là TRAKE, 1 phần tử nếu KIS/Q&A
     answer: Optional[str]     # Chỉ dùng cho Q&A
     wrrf_score: float
 ```
@@ -267,23 +266,6 @@ class RetrievalResult:
 ## 10. Thiết kế phi chặn
 
 Nhóm áp dụng chiến lược tạo **Mock Interfaces** (Dữ liệu giả lập) ngay từ ngày đầu tiên để không ai phải đợi ai.
-
-Ví dụ Mock Database (cho Member 4 & 5 code trước khi Member 2 & 3 làm xong):
-
-```python
-# mock_search_engine.py 
-def mock_milvus_search(query_vector: List[float]) -> List[RetrievalResult]:
-    return [
-        RetrievalResult(video_id="L01_V001", frame_ids=[1500], answer=None, wrrf_score=0.95),
-        RetrievalResult(video_id="L01_V002", frame_ids=[2000], answer=None, wrrf_score=0.82)
-    ]
-```
-
-**Lộ trình phát triển:**
-
-- **Tuần 1:** Thống nhất API Contracts (như Mục 9), lập trình các hàm Mock.
-- **Tuần 2:** Member 1 train pipeline; Member 2 generate vector; Member 4 viết logic toán học DANTE.
-- **Tuần 3:** Thay Mock bằng dữ liệu thật, test luồng End-to-End.
 
 ---
 

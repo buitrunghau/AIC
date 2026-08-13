@@ -21,16 +21,15 @@ Danh sách `MultimodalMetadata` từ Phase 2.
   {
     "keyframe_id": "L01_V025_1050",
     "dense_vector": [0.12, -0.45, 0.89, "..."],
-    "ocr_text": "BỆNH VIỆN CHỢ RẪY",
-    "asr_transcript": "Bệnh nhân đã được cấp cứu kịp thời."
+    "ocr_text": "BỆNH VIỆN CHỢ RẪY"
   }
 ]
 ```
 
 **Đầu ra (Output):**  
 Indexed Database gồm:
-- Milvus collection chứa các dense vectors (SigLIP/BEiT-3).
-- Elasticsearch index chứa dữ liệu văn bản (OCR/ASR).
+- Milvus collection chứa các dense vectors (SigLIP2/BEiT-3).
+- Elasticsearch index chứa dữ liệu văn bản thị giác (OCR).
 
 **Ví dụ Output:**
 ```json
@@ -48,8 +47,7 @@ Indexed Database gồm:
     "documents": 1,
     "sample": {
       "keyframe_id": "L01_V025_1050",
-      "ocr_text": "BỆNH VIỆN CHỢ RẪY",
-      "asr_transcript": "Bệnh nhân đã được cấp cứu kịp thời."
+      "ocr_text": "BỆNH VIỆN CHỢ RẪY"
     }
   }
 }
@@ -65,12 +63,13 @@ Indexed Database gồm:
 
 ### 3.2. Elasticsearch (Sparse/Text)
 
-- Tạo index với trường `keyframe_id` và các trường văn bản `ocr_text`, `asr_transcript`.
+- Tạo index với trường `keyframe_id` và trường văn bản `ocr_text`.
 - Cấu hình analyzer phù hợp cho tiếng Việt/Anh.
-- Sử dụng BM25 kết hợp mô hình nhúng thưa để đối sánh từ vựng chính xác (exact lexical matching).
+- Sử dụng BM25 để đối sánh từ vựng chính xác (exact lexical matching).
 
 ## 4. Danh sách chuyển giao (Deliverables Checklist)
 
 - [ ] `milvus_indexer.py`: Script tạo collection và nạp vector vào Milvus.
-- [ ] `elastic_indexer.py`: Script tạo index và nạp văn bản vào Elasticsearch.
+- [ ] `elastic_indexer.py`: Script tạo index và nạp văn bản OCR vào Elasticsearch.
+- [ ] `index_data.py`: Script pipeline chính thực thi Phase 3 end-to-end.
 - [ ] `tests/test_indexing.py`: Kiểm tra số lượng bản ghi, tính nhất quán `keyframe_id` giữa hai DB.

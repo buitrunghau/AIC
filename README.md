@@ -7,7 +7,7 @@ Hỗ trợ 3 loại truy vấn chính:
 | Loại truy vấn | Mô tả |
 |----------------|-------|
 | **Textual KIS** | Tìm khung hình đơn lẻ theo mô tả văn bản |
-| **Q&A**        | Tìm khung hình chứa câu trả lời thị giác (OCR, ASR) |
+| **Q&A**        | Tìm khung hình chứa câu trả lời thị giác (OCR) |
 | **TRAKE**      | Tìm chuỗi khung hình đúng trình tự sự kiện thời gian |
 
 ---
@@ -34,14 +34,13 @@ Hỗ trợ 3 loại truy vấn chính:
 
 ## Tính năng chính
 
-- **Tiền xử lý video thông minh**: Phát hiện shot bằng TransNetV2, lọc khung hình thích ứng dựa trên khoảng cách vector, loại bỏ khung hình rác.
+- **Tiền xử lý video thông minh**: Phát hiện shot bằng TransNetV2, lọc khung hình thích ứng dựa trên khoảng cách vector L2, loại bỏ khung hình rác.
 - **Trích xuất đa phương thức**:
   - Visual embeddings: SigLIP2, BEiT-3.
-  - OCR: Qwen2.5-VL.
-  - ASR: Whisper.
+  - OCR (Visual Text): Qwen2.5-VL.
 - **Lập chỉ mục kép**:
   - Milvus (dense vectors, HNSW) cho tìm kiếm ngữ nghĩa.
-  - Elasticsearch (sparse/text, BM25) cho tìm kiếm từ khóa chính xác.
+  - Elasticsearch (sparse/text, BM25) cho tìm kiếm từ khóa OCR chính xác.
 - **Tìm kiếm hybrid**: Kết hợp điểm số bằng Weighted Reciprocal Rank Fusion (WRRF).
 - **Căn chỉnh thời gian**: Thuật toán DANTE (Dynamic Programming) cho truy vấn TRAKE.
 - **Tương tác phản hồi**: Relevance feedback Rocchio để tinh chỉnh truy vấn.
@@ -64,10 +63,10 @@ Hỗ trợ 3 loại truy vấn chính:
          ▼
 ┌───────────────────┐
 │ Phase 2: Metadata │  (Member 2 – AI & Metadata Eng)
-│ SigLIP/BEiT-3     │
-│ Qwen2.5-VL, Whisper
+│ SigLIP2/BEiT-3    │
+│ Qwen2.5-VL (OCR)  │
 └────────┬──────────┘
-         │  List[KeyframeData + Embeddings + Text]
+         │  List[KeyframeData + Embeddings + OCR]
          ▼
 ┌───────────────────┐
 │ Phase 3: Indexing │  (Member 3 – Backend & DB Admin)
@@ -90,7 +89,7 @@ Hỗ trợ 3 loại truy vấn chính:
 └────────┬──────────┘
          │
          ▼
- [Final submission.zip]
+  [Final submission.zip]
 ```
 
 ---
@@ -121,7 +120,7 @@ Hỗ trợ 3 loại truy vấn chính:
 **Luồng xử lý:**
 
 - **Visual Embeddings**: Dùng SigLIP2 và BEiT-3 mã hóa hình ảnh thành vector đa chiều. Khác với CLIP dùng softmax, SigLIP dùng hàm suy hao sigmoid (sigmoid loss) cho không gian biểu diễn hội tụ tốt hơn.
-- **Text & Speech (OCR/ASR)**: Gọi Qwen2.5-VL bóc tách chữ trên video (bảng hiệu, thời sự); dùng Whisper bóc tách lời thoại thành văn bản có gắn nhãn thời gian (timestamped speech-to-text).
+- **Visual Text (OCR)**: Gọi Qwen2.5-VL bóc tách chữ xuất hiện trên video (bảng hiệu, dòng chữ thời sự, bảng tên,...).
 
 ### Phase 3 – Indexing Module
 
@@ -131,8 +130,8 @@ Hỗ trợ 3 loại truy vấn chính:
 
 **Luồng xử lý:**
 
-- **Milvus (Dense Vectors)**: Nạp vector SigLIP/BEiT-3. Sử dụng đồ thị HNSW để tìm kiếm lân cận gần nhất (ANN) siêu tốc.
-- **Elasticsearch (Sparse/Text)**: Nạp dữ liệu OCR/ASR. Chạy thuật toán BM25 kết hợp mô hình nhúng thưa để đối sánh từ vựng chính xác (exact lexical matching).
+- **Milvus (Dense Vectors)**: Nạp vector SigLIP2/BEiT-3. Sử dụng đồ thị HNSW để tìm kiếm lân cận gần nhất (ANN) siêu tốc.
+- **Elasticsearch (Sparse/Text)**: Nạp dữ liệu văn bản OCR. Chạy thuật toán BM25 kết hợp mô hình nhúng thưa để đối sánh từ vựng chính xác (exact lexical matching).
 
 ### Phase 4 – Retrieval & Alignment Module
 
@@ -158,8 +157,8 @@ WRRF(q, d) = α_d / (r_text(q, d) + k) + (1 - α_d) / (r_vision(q, d) + k)
 
 **Luồng xử lý:**
 
-- **Relevance Feedback (Rocchio)**: Người dùng nhãn Đúng/Sai trực quan. Thuật toán Rocchio sẽ tự động dịch chuyển vector truy vấn `q_m` về gần với các kết quả đúng (`C_r`) và đẩy ra xa bối cảnh sai (`C_nr`).
-- **Format Validator**: Code tự động xóa đuôi `.mp4` khỏi ID, bọc ngoặc kép cho Q&A, và gói tệp CSV vào thư mục trung gian `submission` trước khi zip.
+- **Relevance Feedback (Rocchio)**: Người dùng gắn nhãn Đúng/Sai trực quan. Thuật toán Rocchio sẽ tự động dịch chuyển vector truy vấn `q_m` về gần với các kết quả đúng (`C_r`) và đẩy ra xa bối cảnh sai (`C_nr`).
+- **Format Validator**: Code tự động kiểm tra loại bỏ đuôi `.mp4` khỏi ID, bọc ngoặc kép cho Q&A, và gói tệp CSV vào thư mục trung gian `submission` trước khi zip.
 
 ---
 
@@ -239,11 +238,11 @@ WRRF(q, d) = α_d / (r_text(q, d) + k) + (1 - α_d) / (r_vision(q, d) + k)
 
 ## Giao diện tích hợp (API Contracts)
 
-Để 5 thành viên có thể code độc lập, các `TypedDict`/`Dataclass` được định nghĩa nghiêm ngặt.
+Để 5 thành viên có thể code độc lập, các `dataclass` được định nghĩa nghiêm ngặt trong `shared_contracts/contracts.py`:
 
 ```python
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 @dataclass
 class KeyframeData:
@@ -252,21 +251,20 @@ class KeyframeData:
     video_id: str
     frame_idx: int
     timestamp_sec: float
-    image_matrix: object      # Numpy array của ảnh
+    image_matrix: Any         # Numpy array hoac PIL Image
 
 @dataclass
 class MultimodalMetadata:
     """Contract Output Phase 2 -> Input Phase 3"""
     keyframe_id: str
-    dense_vector: List[float] # Từ SigLIP/BEiT-3
-    ocr_text: str             # Từ Qwen2.5-VL
-    asr_transcript: str       # Từ Whisper
+    dense_vector: List[float] # Tu SigLIP2/BEiT-3
+    ocr_text: str             # Tu Qwen2.5-VL
 
 @dataclass
 class RetrievalResult:
     """Contract Output Phase 4 -> Input Phase 5"""
     video_id: str
-    frame_ids: List[int]      # Sẽ có N phần tử nếu là TRAKE, 1 phần tử nếu KIS
+    frame_ids: List[int]      # Sẽ có N phần tử nếu là TRAKE, 1 phần tử nếu KIS/Q&A
     answer: Optional[str]     # Chỉ dùng cho Q&A
     wrrf_score: float
 ```
@@ -276,23 +274,6 @@ class RetrievalResult:
 ## Thiết kế phi chặn (Non-blocking Integration)
 
 Nhóm áp dụng chiến lược tạo **Mock Interfaces** (Dữ liệu giả lập) ngay từ ngày đầu tiên để không ai phải đợi ai.
-
-### Ví dụ Mock Database
-
-```python
-# mock_search_engine.py
-def mock_milvus_search(query_vector: List[float]) -> List[RetrievalResult]:
-    return [
-        RetrievalResult(video_id="L01_V001", frame_ids=[1500], answer=None, wrrf_score=0.95),
-        RetrievalResult(video_id="L01_V002", frame_ids=[2000], answer=None, wrrf_score=0.82)
-    ]
-```
-
-### Lộ trình phát triển
-
-- **Tuần 1:** Thống nhất API Contracts (như Mục 9), lập trình các hàm Mock.
-- **Tuần 2:** Member 1 train pipeline; Member 2 generate vector; Member 4 viết logic toán học DANTE.
-- **Tuần 3:** Thay Mock bằng dữ liệu thật, test luồng End-to-End.
 
 ---
 
@@ -311,8 +292,8 @@ def mock_milvus_search(query_vector: List[float]) -> List[RetrievalResult]:
 ### 1. Clone repository
 
 ```bash
-git clone https://github.com/your-org/multimodal-video-retrieval.git
-cd multimodal-video-retrieval
+git clone https://github.com/nhuutri2000-max/AIC.git
+cd AIC
 ```
 
 ### 2. Tạo môi trường ảo
@@ -327,66 +308,6 @@ venv\Scripts\activate      # Windows
 
 ```bash
 pip install -r requirements.txt
-```
-
-`requirements.txt` gợi ý:
-
-```text
-torch==2.3.0
-torchvision==0.18.0
-transformers==4.41.0
-sentence-transformers==2.7.0
-open-clip-torch==2.24.0
-transnetv2==0.1.0
-qwen-vl-utils
-whisper
-pymilvus==2.4.0
-elasticsearch==8.13.0
-faiss-cpu==1.8.0
-numpy
-opencv-python
-pandas
-tqdm
-python-dotenv
-```
-
-> Một số model (Qwen2.5-VL, Whisper) có thể cần cài đặt thêm từ source. Xem tài liệu chính thức của từng model.
-
-### 4. Khởi động Milvus và Elasticsearch bằng Docker
-
-Tạo file `docker-compose.yml`:
-
-```yaml
-version: '3.8'
-services:
-  milvus:
-    image: milvusdb/milvus:v2.4.0
-    ports:
-      - "19530:19530"
-    environment:
-      - COMMON_STORAGE=local
-    volumes:
-      - milvus_data:/var/lib/milvus
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-    ports:
-      - "9200:9200"
-    volumes:
-      - es_data:/usr/share/elasticsearch/data
-
-volumes:
-  milvus_data:
-  es_data:
-```
-
-Chạy:
-
-```bash
-docker-compose up -d
 ```
 
 ---
@@ -421,7 +342,6 @@ ES_INDEX=video_text
 VISION_MODEL=siglip2
 TEXT_MODEL=beit3
 OCR_MODEL=qwen2.5-vl
-ASR_MODEL=whisper
 
 # Retrieval
 WRRF_ALPHA=0.6
@@ -439,31 +359,26 @@ TOP_K=100
 #### Phase 1: Data Pipeline
 
 ```bash
-python -m pipeline.phase1_extract_keyframes \
+python -m phase1_pipeline.extract_keyframes \
     --video_dir $RAW_VIDEO_PATH \
     --output_dir $KEYFRAME_PATH \
     --threshold 0.4
 ```
 
-Kết quả: danh sách `KeyframeData` lưu dưới dạng JSON + ảnh keyframe.
-
 #### Phase 2: Metadata Module
 
 ```bash
-python -m pipeline.phase2_generate_metadata \
+python -m phase2_metadata.generate_metadata \
     --keyframe_dir $KEYFRAME_PATH \
     --output_dir $METADATA_PATH \
     --vision_model $VISION_MODEL \
-    --ocr_model $OCR_MODEL \
-    --asr_model $ASR_MODEL
+    --ocr_model $OCR_MODEL
 ```
-
-Kết quả: file `metadata.json` chứa `dense_vector`, `ocr_text`, `asr_transcript` cho mỗi keyframe.
 
 #### Phase 3: Indexing Module
 
 ```bash
-python -m pipeline.phase3_index_data \
+python -m phase3_indexing.index_data \
     --metadata_path $METADATA_PATH \
     --milvus_host $MILVUS_HOST \
     --milvus_port $MILVUS_PORT \
@@ -471,36 +386,36 @@ python -m pipeline.phase3_index_data \
     --es_port $ES_PORT
 ```
 
-Dữ liệu được nạp vào Milvus và Elasticsearch.
-
 #### Phase 4: Retrieval & Alignment
 
-Chạy API:
-
-```bash
-python -m api.main
-```
-
-Hoặc sử dụng CLI:
+Chạy CLI:
 
 ```bash
 # Truy vấn KIS
-python -m retrieval.search \
+python -m phase4_retrieval.search \
     --query "Một người đàn ông mặc áo khoác đỏ đang dắt chó đi dạo trong công viên." \
     --query_type KIS \
     --top_k 10
 
 # Truy vấn TRAKE
-python -m retrieval.search \
+python -m phase4_retrieval.search \
     --query "Người đàn ông chạy đà, giậm nhảy qua xà, và tiếp đất trên nệm." \
     --query_type TRAKE \
     --top_k 5
 ```
 
-#### Phase 5: Đóng gói kết quả
+#### Phase 5: QA UI & Đóng gói kết quả
+
+Chạy giao diện Web:
 
 ```bash
-python -m qa.export_submission \
+streamlit run phase5_qa_ui/streamlit_app.py
+```
+
+Xuất file submission:
+
+```bash
+python -m phase5_qa_ui.export_submission \
     --results_path ./output/results.json \
     --output_dir ./submission
 ```
@@ -509,74 +424,42 @@ Tự động tạo file `submission.zip` chuẩn CodaBench.
 
 ---
 
-## API Endpoints
-
-Khởi động server:
-
-```bash
-uvicorn api.main:app --host 0.0.0.0 --port 8000
-```
-
-| Endpoint | Method | Mô tả |
-|----------|--------|-------|
-| `/search` | POST | Tìm kiếm khung hình/video theo truy vấn |
-| `/feedback` | POST | Cập nhật phản hồi người dùng (Rocchio) |
-| `/export` | GET | Xuất file `submission.zip` |
-
-Ví dụ request `/search`:
-
-```json
-{
-  "query": "Một người đàn ông mặc áo khoác đỏ đang dắt chó đi dạo trong công viên.",
-  "query_type": "KIS",
-  "top_k": 10
-}
-```
-
-Response:
-
-```json
-{
-  "results": [
-    {
-      "video_id": "L01_V015",
-      "frame_ids": [3450],
-      "query_type": "Textual_KIS",
-      "rank": 1,
-      "wrrf_score": 0.95
-    }
-  ]
-}
-```
-
----
-
 ## Cấu trúc thư mục
 
 ```text
 .
-├── api/                    # FastAPI endpoints
-│   └── main.py
-├── pipeline/               # Phase 1-3
-│   ├── phase1_extract_keyframes.py
-│   ├── phase2_generate_metadata.py
-│   └── phase3_index_data.py
-├── retrieval/              # Phase 4
+├── phase1_pipeline/           # Phase 1: TransNetV2 & Adaptive Sampler
+│   ├── transnet_segmentation.py
+│   ├── adaptive_sampler.py
+│   ├── extract_keyframes.py
+│   └── task.md
+├── phase2_metadata/           # Phase 2: Visual Embeddings & OCR
+│   ├── siglip_beit_embedder.py
+│   ├── qwen_ocr_extractor.py
+│   ├── generate_metadata.py
+│   └── task.md
+├── phase3_indexing/           # Phase 3: Milvus & Elasticsearch Indexing
+│   ├── milvus_indexer.py
+│   ├── elastic_indexer.py
+│   ├── index_data.py
+│   └── task.md
+├── phase4_retrieval/          # Phase 4: Hybrid Search (WRRF) & DANTE (TRAKE)
+│   ├── hybrid_search_wrrf.py
+│   ├── dante_trake_solver.py
 │   ├── search.py
-│   ├── wrrf.py
-│   └── dante.py
-├── qa/                     # Phase 5
+│   └── task.md
+├── phase5_qa_ui/              # Phase 5: Rocchio Feedback, UI & Submission Exporter
+│   ├── rocchio_feedback.py
+│   ├── csv_formatter.py
 │   ├── export_submission.py
-│   └── rocchio.py
-├── contracts.py            # API Contracts (dataclasses)
-├── mock/                   # Mock interfaces cho phát triển song song
-│   └── mock_search_engine.py
-├── data/                   # Dữ liệu thô và trung gian
-├── output/                 # Kết quả truy vấn
-├── submission/             # File zip cuối cùng
-├── .env.example
+│   ├── streamlit_app.py
+│   └── task.md
+├── shared_contracts/          # Contract DataClasses dùng chung giữa 5 Phase
+│   └── contracts.py
+├── tests/                     # Test cases cho 5 Phase
 ├── docker-compose.yml
 ├── requirements.txt
+├── architecture_overview.md
 └── README.md
 ```
 
@@ -600,8 +483,6 @@ Response:
 3. Commit thay đổi.
 4. Push branch: `git push origin feature/ten-tinh-nang`.
 5. Tạo Pull Request.
-
-Vui lòng tuân thủ API Contracts và viết unit test cho các module mới.
 
 ---
 

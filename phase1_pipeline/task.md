@@ -8,7 +8,7 @@
 
 - Phân đoạn video nguyên bản thành các cảnh quay (shots) có tính nhất quán về ngữ nghĩa.
 - Lọc và loại bỏ các khung hình rác/trùng lặp để tối ưu hóa dung lượng tính toán.
-- Đóng gói dữ liệu đầu ra thành chuẩn chung để chuyển giao sang Phase 2.
+- Đóng gói dữ liệu đầu ra thành chuẩn chung `KeyframeData` để chuyển giao sang Phase 2.
 
 ## 2. Đầu vào & Đầu ra (Inputs & Outputs)
 
@@ -65,4 +65,5 @@ Danh sách đối tượng `KeyframeData` chuẩn hóa:
 
 - [ ] `transnet_segmentation.py`: Chứa class tải trọng số mô hình TransNetV2 và hàm chia video thành các đoạn cắt cảnh.
 - [ ] `adaptive_sampler.py`: Logic toán học tính khoảng cách \(L_2\) để lọc khung hình giữ lại.
+- [ ] `extract_keyframes.py`: Script pipeline chính thực thi Phase 1 end-to-end.
 - [ ] `tests/test_pipeline.py`: Unit test đảm bảo các ID khung hình xuất ra đúng thứ tự, và hàm cắt không làm mất các khung hình chứa nội dung quan trọng.
