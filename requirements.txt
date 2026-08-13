@@ -1,0 +1,9 @@
+torch
+transformers
+pymilvus
+elasticsearch
+streamlit
+numpy
+opencv-python
+pytest
+flake8

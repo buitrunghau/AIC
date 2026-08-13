@@ -1,0 +1,42 @@
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+
+# ML artifacts
+*.mp4
+*.mkv
+*.pt
+*.bin
+*.safetensors
+
+# Local Milvus/Elasticsearch data volumes
+milvus_data/
+es_data/
+volumes/milvus/
+volumes/elasticsearch/
+
+# Logs
+*.log
