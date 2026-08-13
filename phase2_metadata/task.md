@@ -16,9 +16,26 @@
 - Danh sách `KeyframeData` từ Module 1.
 - Luồng âm thanh `.wav` hoặc `.mp3` bóc tách từ video gốc.
 
+**Ví dụ Input:**
+```json
+{
+  "keyframes": [
+    {
+      "keyframe_id": "L01_V025_1050",
+      "video_id": "L01_V025",
+      "frame_idx": 1050,
+      "timestamp_sec": 35.0,
+      "image_matrix": "<numpy_array_data>"
+    }
+  ],
+  "audio_file": "/data/audio/L01_V025.wav"
+}
+```
+
 **Đầu ra (Output):**  
 Danh sách đối tượng `MultimodalMetadata`:
 
+**Ví dụ Output:**
 ```json
 [
   {

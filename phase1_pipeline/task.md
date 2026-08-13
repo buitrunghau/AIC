@@ -15,9 +15,21 @@
 **Đầu vào (Input):**  
 Các tệp video thô nguyên bản định dạng `.mp4` được cung cấp từ bộ dữ liệu.
 
+**Ví dụ Input:**
+```json
+[
+  {
+    "video_id": "L01_V025",
+    "video_path": "/data/raw_videos/L01_V025.mp4",
+    "fps": 30.0
+  }
+]
+```
+
 **Đầu ra (Output):**  
 Danh sách đối tượng `KeyframeData` chuẩn hóa:
 
+**Ví dụ Output:**
 ```json
 [
   {

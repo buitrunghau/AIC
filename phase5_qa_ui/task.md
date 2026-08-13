@@ -16,8 +16,52 @@
 - Danh sách `RetrievalResult` từ Phase 4.
 - Phản hồi của người dùng (nhãn Đúng/Sai) nếu có.
 
+**Ví dụ Input:**
+```json
+{
+  "retrieval_results": [
+    {
+      "video_id": "L01_V025",
+      "frame_ids": [1050, 1080, 1120],
+      "answer": null,
+      "wrrf_score": 0.942
+    },
+    {
+      "video_id": "L02_V030.mp4",
+      "frame_ids": [5120],
+      "answer": "59A-123.45",
+      "wrrf_score": 0.931
+    }
+  ],
+  "feedback_labels": [
+    {"video_id": "L01_V025", "frame_ids": [1050, 1080, 1120], "label": "relevant"},
+    {"video_id": "L02_V030.mp4", "frame_ids": [5120], "label": "relevant"}
+  ]
+}
+```
+
 **Đầu ra (Output):**  
 Tệp `submission.zip` chứa file CSV chuẩn CodaBench.
+
+**Ví dụ Output:**
+```json
+{
+  "zip_file": "/submission/submission.zip",
+  "csv_file": "/submission/results.csv",
+  "csv_preview": [
+    {
+      "video_id": "L01_V025",
+      "frame_ids": "1050 1080 1120",
+      "answer": ""
+    },
+    {
+      "video_id": "L02_V030",
+      "frame_ids": "5120",
+      "answer": "\"59A-123.45\""
+    }
+  ]
+}
+```
 
 ## 3. Các công việc chi tiết (Key Tasks)
 

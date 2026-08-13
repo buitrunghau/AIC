@@ -16,9 +16,28 @@
 - Chuỗi văn bản truy vấn \(Q\) (vd: "Người đàn ông chạy đà, giậm nhảy...").
 - Danh sách điểm số thô và `keyframe_id` trả về từ DB Phase 3.
 
+**Ví dụ Input:**
+```json
+{
+  "query": "Người đàn ông chạy đà, giậm nhảy qua xà, và tiếp đất trên nệm.",
+  "query_type": "TRAKE",
+  "dense_hits": [
+    {"keyframe_id": "L01_V025_1050", "rank": 1, "score": 0.91},
+    {"keyframe_id": "L01_V025_1080", "rank": 2, "score": 0.89},
+    {"keyframe_id": "L01_V025_1120", "rank": 3, "score": 0.88}
+  ],
+  "sparse_hits": [
+    {"keyframe_id": "L01_V025_1080", "rank": 1, "score": 13.2},
+    {"keyframe_id": "L01_V025_1050", "rank": 2, "score": 12.7},
+    {"keyframe_id": "L01_V025_1120", "rank": 4, "score": 11.4}
+  ]
+}
+```
+
 **Đầu ra (Output):**  
 Danh sách đối tượng `RetrievalResult` (Sẽ được Phase 5 đóng gói):
 
+**Ví dụ Output:**
 ```json
 [
   {

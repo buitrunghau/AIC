@@ -15,10 +15,45 @@
 **Đầu vào (Input):**  
 Danh sách `MultimodalMetadata` từ Phase 2.
 
+**Ví dụ Input:**
+```json
+[
+  {
+    "keyframe_id": "L01_V025_1050",
+    "dense_vector": [0.12, -0.45, 0.89, "..."],
+    "ocr_text": "BỆNH VIỆN CHỢ RẪY",
+    "asr_transcript": "Bệnh nhân đã được cấp cứu kịp thời."
+  }
+]
+```
+
 **Đầu ra (Output):**  
 Indexed Database gồm:
 - Milvus collection chứa các dense vectors (SigLIP/BEiT-3).
 - Elasticsearch index chứa dữ liệu văn bản (OCR/ASR).
+
+**Ví dụ Output:**
+```json
+{
+  "milvus_collection": {
+    "name": "video_frames",
+    "records": 1,
+    "sample": {
+      "keyframe_id": "L01_V025_1050",
+      "dense_vector_dim": 1024
+    }
+  },
+  "elasticsearch_index": {
+    "name": "video_text",
+    "documents": 1,
+    "sample": {
+      "keyframe_id": "L01_V025_1050",
+      "ocr_text": "BỆNH VIỆN CHỢ RẪY",
+      "asr_transcript": "Bệnh nhân đã được cấp cứu kịp thời."
+    }
+  }
+}
+```
 
 ## 3. Các công việc chi tiết (Key Tasks)
 
