@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any
+from dataclasses import dataclass
+from typing import List, Optional, Any
 
 @dataclass
 class KeyframeData:
@@ -14,6 +14,7 @@ class KeyframeData:
 class MultimodalMetadata:
     """Contract Output Phase 2 -> Input Phase 3"""
     keyframe_id: str
+    video_id: str             # Thêm để Phase 3/4 group theo video mà không cần parse keyframe_id
     dense_vector: List[float] # Tu SigLIP2 / BEiT-3
     ocr_text: str             # Tu Qwen2.5-VL
 
@@ -22,5 +23,6 @@ class RetrievalResult:
     """Contract Output Phase 4 -> Input Phase 5"""
     video_id: str
     frame_ids: List[int]      # N phần tử nếu là TRAKE, 1 phần tử nếu KIS/Q&A
+    query_type: str           # "KIS", "Q&A", hoặc "TRAKE" — Phase 5 dùng để format output đúng chuẩn
     answer: Optional[str]     # Chỉ dùng cho Q&A
     wrrf_score: float

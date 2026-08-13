@@ -44,6 +44,7 @@ Danh sách đối tượng `RetrievalResult`:
   {
     "video_id": "L01_V025",
     "frame_ids": [1050, 1080, 1120],
+    "query_type": "TRAKE",
     "answer": null,
     "wrrf_score": 0.942
   }
@@ -75,3 +76,5 @@ Triển khai thuật toán DANTE (Dynamic Alignment of Narrative Temporal Events
 - [ ] `dante_trake_solver.py`: Logic quy hoạch động tính toán và căn chỉnh chuỗi sự kiện theo thời gian.
 - [ ] `search.py`: Core retriever interface nhận query từ API/UI và trả về `RetrievalResult`.
 - [ ] `tests/test_retrieval.py`: Test case giả lập \(N=3\), cung cấp 3 vector giả có thứ tự lộn xộn để khẳng định hàm DANTE luôn xuất ra mảng có frame index tăng dần và loại bỏ nhiễu.
+
+> ⚠️ **Lưu ý:** File stub hiện tại `hybrid_retriever.py` cần được **xóa và thay thế** bằng 3 file kể trên. Giữ nguyên `hybrid_retriever.py` sẽ khiến lệnh `python -m phase4_retrieval.search` lỗi `ModuleNotFoundError`.

@@ -36,6 +36,7 @@ Danh sách đối tượng `MultimodalMetadata`:
 [
   {
     "keyframe_id": "L01_V025_1050",
+    "video_id": "L01_V025",
     "dense_vector": [0.12, -0.45, 0.89, "..."],
     "ocr_text": "BỆNH VIỆN CHỢ RẪY"
   }
@@ -61,3 +62,5 @@ Danh sách đối tượng `MultimodalMetadata`:
 - [ ] `qwen_ocr_extractor.py`: Tích hợp mô hình MLLM để trích xuất văn bản thị giác (OCR).
 - [ ] `generate_metadata.py`: Script pipeline chính thực thi Phase 2 end-to-end.
 - [ ] `tests/test_metadata.py`: Đảm bảo vector xuất ra đúng số chiều (vd: 768 hoặc 1024) và text OCR xử lý tốt tiếng Việt.
+
+> ⚠️ **Lưu ý:** File stub hiện tại `multimodal_extractor.py` cần được **xóa và thay thế** bằng 3 file kể trên. Giữ nguyên `multimodal_extractor.py` sẽ khiến lệnh `python -m phase2_metadata.generate_metadata` lỗi `ModuleNotFoundError`.
