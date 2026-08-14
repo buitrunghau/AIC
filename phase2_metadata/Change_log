@@ -1,0 +1,4 @@
+15/08/2026: 
+  - Thêm module xử lý Embeddings sử dụng google/siglip-base-patch16-224 và OCR Qwen/Qwen2.5-VL-7B-Instruct cho Phase 2.
+  - Thêm pipeline_utils để lấy dữ liệu từ phase 1
+  - Lưu ý: Qwen khá là nặng và xử lý lâu sẽ chuyển đổi sang PaddleOCR (PP-OCRv4) vào lần sau
