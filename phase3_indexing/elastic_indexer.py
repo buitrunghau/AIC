@@ -4,17 +4,16 @@ Deliverable: elastic_indexer.py
 - Creates Elasticsearch index with fields: keyframe_id, video_id, ocr_text.
 - Configures BM25 analyzer with Vietnamese/English language support.
 - Indexes MultimodalMetadata.ocr_text for exact lexical matching.
-
 elastic_indexer.py
 ===================
 Phase 3 - Indexing Module (Member 3 - Backend & DB Administrator)
- 
+
 Chịu trách nhiệm:
     - Tạo Elasticsearch index với `keyframe_id` (keyword) + `ocr_text` /
       `asr_transcript` (text).
     - Cấu hình analyzer song ngữ Việt/Anh + similarity BM25 (k1, b tùy chỉnh).
     - Nạp dữ liệu văn bản thị giác (OCR) và thoại (ASR) qua bulk API.
- 
+
 Ghi chú về analyzer tiếng Việt:
     Elasticsearch KHÔNG có analyzer "vietnamese" built-in (không nằm trong
     danh sách language analyzer mặc định). Vì tiếng Việt dùng ký tự Latin
@@ -27,13 +26,39 @@ Ghi chú về analyzer tiếng Việt:
     Nếu cần tách từ ghép tiếng Việt chính xác hơn (ví dụ "bệnh viện" là 1
     từ chứ không phải 2 âm tiết rời), nên tiền xử lý bằng underthesea/pyvi
     ở Phase 2 trước khi đưa `ocr_text` sang đây, hoặc cài plugin ICU.
- 
+
 Thiết kế:
     Client `elasticsearch` thật và hàm `bulk()` được inject được (dependency
     injection) để unit test không cần một Elasticsearch server thật.
-
 """
+"""
+elastic_indexer.py
+===================
+Phase 3 - Indexing Module (Member 3 - Backend & DB Administrator)
 
+Chịu trách nhiệm:
+    - Tạo Elasticsearch index với `keyframe_id` (keyword) + `ocr_text` /
+      `asr_transcript` (text).
+    - Cấu hình analyzer song ngữ Việt/Anh + similarity BM25 (k1, b tùy chỉnh).
+    - Nạp dữ liệu văn bản thị giác (OCR) và thoại (ASR) qua bulk API.
+
+Ghi chú về analyzer tiếng Việt:
+    Elasticsearch KHÔNG có analyzer "vietnamese" built-in (không nằm trong
+    danh sách language analyzer mặc định). Vì tiếng Việt dùng ký tự Latin
+    có dấu và phân tách bằng khoảng trắng ở cấp âm tiết, ta dùng:
+      - `standard` tokenizer (tách theo khoảng trắng/dấu câu, hoạt động ổn
+        cho cả tiếng Việt lẫn tiếng Anh).
+      - `lowercase` + stopword filter riêng cho vi/en.
+      - Một sub-field `.folded` dùng `asciifolding` để hỗ trợ tìm kiếm
+        không dấu (UX phổ biến khi người dùng gõ tiếng Việt không dấu).
+    Nếu cần tách từ ghép tiếng Việt chính xác hơn (ví dụ "bệnh viện" là 1
+    từ chứ không phải 2 âm tiết rời), nên tiền xử lý bằng underthesea/pyvi
+    ở Phase 2 trước khi đưa `ocr_text` sang đây, hoặc cài plugin ICU.
+
+Thiết kế:
+    Client `elasticsearch` thật và hàm `bulk()` được inject được (dependency
+    injection) để unit test không cần một Elasticsearch server thật.
+"""
 from __future__ import annotations
 
 import logging
@@ -204,14 +229,14 @@ class ElasticIndexer:
         insert xong, không gọi sau mỗi batch để tránh commit segment liên tục.
         """
         if self._client is None:
-            return
+            self.connect()
         if hasattr(self._client, "indices") and hasattr(self._client.indices, "refresh"):
             self._client.indices.refresh(index=self.cfg.index_name)
             logger.info("Đã refresh index '%s'.", self.cfg.index_name)
 
     def count(self) -> int:
         if self._client is None:
-            return 0
+            self.connect()
         result = self._client.count(index=self.cfg.index_name)
         if isinstance(result, dict):
             return result.get("count", 0)
@@ -229,7 +254,7 @@ class ElasticIndexer:
         duyệt hết toàn bộ document theo trang mà không bị giới hạn đó.
         """
         if self._client is None:
-            return []
+            self.connect()
         if hasattr(self._client, "get_all_ids"):
             return self._client.get_all_ids(self.cfg.index_name)
 
@@ -255,6 +280,8 @@ class ElasticIndexer:
 
     def get_document(self, keyframe_id: str):
         """Lấy 1 document theo keyframe_id (tiện ích cho test/verify)."""
+        if self._client is None:
+            self.connect()
         if hasattr(self._client, "docs"):
             return self._client.docs.get(self.cfg.index_name, {}).get(keyframe_id)
         resp = self._client.get(index=self.cfg.index_name, id=keyframe_id)
@@ -277,7 +304,7 @@ class ElasticIndexer:
             sắp xếp giảm dần theo BM25 score.
         """
         if self._client is None:
-            return []
+            self.connect()
 
         body = {
             "query": {
