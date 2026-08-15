@@ -1,17 +1,4 @@
-"""Phase 3: Main pipeline script for end-to-end indexing into Milvus and Elasticsearch.
-
-Deliverable: index_data.py
-Entry point: python -m phase3_indexing.index_data
-    --metadata_path   Path to MultimodalMetadata output from Phase 2
-    --milvus_host     Milvus server host (default: localhost)
-    --milvus_port     Milvus server port (default: 19530)
-    --es_host         Elasticsearch host (default: localhost)
-    --es_port         Elasticsearch port (default: 9200)
-
-Output: Indexed data in Milvus (dense vectors) and Elasticsearch (OCR text),
-        linked by keyframe_id primary key.
-
-        
+"""
 index_data.py
 =============
 Phase 3 - Indexing Module - Pipeline chính (end-to-end)
@@ -44,13 +31,14 @@ from elastic_indexer import ElasticIndexer
 from milvus_indexer import MilvusIndexer
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("index_data")
 
 
 def load_metadata(path: str) -> List[MultimodalMetadata]:
-    """Đọc danh sách MultimodalMetadata từ file JSON (output của Phase 2)."""
+    """Đọc danh sách MultimodalMetadata từ file JSON."""
     with open(path, "r", encoding="utf-8") as f:
         raw = json.load(f)
     return [
@@ -67,11 +55,7 @@ def load_metadata(path: str) -> List[MultimodalMetadata]:
 def verify_keyframe_sync(
     milvus: MilvusIndexer, es: ElasticIndexer, records: List[MultimodalMetadata]
 ) -> bool:
-    """
-    Đối chiếu keyframe_id giữa Milvus và Elasticsearch để đảm bảo 2 hệ thống
-    liên kết chặt chẽ (yêu cầu cốt lõi của Phase 3), phục vụ việc hợp nhất
-    kết quả (WRRF) ở Phase 4.
-    """
+    """Đối chiếu keyframe_id giữa Milvus và Elasticsearch."""
     expected_ids = {r.keyframe_id for r in records}
     milvus_ids = set(milvus.get_all_ids())
     es_ids = set(es.get_all_ids())
@@ -94,11 +78,16 @@ def verify_keyframe_sync(
         )
         ok = False
     if milvus_ids != es_ids:
-        logger.warning("keyframe_id giữa Milvus và Elasticsearch KHÔNG khớp nhau.")
+        logger.warning(
+            "keyframe_id giữa Milvus và Elasticsearch KHÔNG khớp nhau."
+        )
         ok = False
 
     if ok:
-        logger.info("Đồng bộ keyframe_id OK: %d bản ghi khớp ở cả 2 hệ thống.", len(expected_ids))
+        logger.info(
+            "Đồng bộ keyframe_id OK: %d bản ghi khớp ở cả 2 hệ thống.",
+            len(expected_ids),
+        )
     return ok
 
 
@@ -110,13 +99,7 @@ def run_pipeline(
     milvus_indexer: Optional[MilvusIndexer] = None,
     es_indexer: Optional[ElasticIndexer] = None,
 ) -> dict:
-    """
-    Thực thi toàn bộ Phase 3: nạp `records` vào Milvus + Elasticsearch,
-    verify đồng bộ, trả về report theo đúng format Output ở mục 2.
-
-    `milvus_indexer` / `es_indexer` cho phép inject sẵn instance (dùng cho
-    test hoặc khi caller muốn tái sử dụng kết nối đã mở).
-    """
+    """Thực thi toàn bộ Phase 3."""
     milvus = milvus_indexer or MilvusIndexer(milvus_cfg)
     es = es_indexer or ElasticIndexer(es_cfg)
 
@@ -125,8 +108,6 @@ def run_pipeline(
     milvus.create_collection(recreate=recreate)
     milvus.build_index()
     milvus.insert(records)
-    # flush() chỉ gọi 1 LẦN sau khi toàn bộ batch đã insert xong, tránh tạo
-    # nhiều segment nhỏ nếu sau này records được insert theo nhiều batch.
     milvus.flush()
     milvus.load()
 
@@ -134,9 +115,6 @@ def run_pipeline(
     es.connect()
     es.create_index(recreate=recreate)
     es.insert(records)
-    # refresh() chỉ gọi 1 LẦN sau khi toàn bộ batch đã insert xong, tránh
-    # ép Elasticsearch commit segment liên tục nếu sau này records được
-    # insert theo nhiều batch.
     es.refresh()
 
     # ---- Verify liên kết keyframe_id ----
@@ -159,7 +137,10 @@ def run_pipeline(
             "name": es.cfg.index_name,
             "documents": es.count(),
             "sample": (
-                {"keyframe_id": records[0].keyframe_id, "ocr_text": records[0].ocr_text}
+                {
+                    "keyframe_id": records[0].keyframe_id,
+                    "ocr_text": records[0].ocr_text,
+                }
                 if records
                 else None
             ),
@@ -169,13 +150,23 @@ def run_pipeline(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 3 - Indexing pipeline (Milvus + Elasticsearch)")
-    parser.add_argument("--input", required=True, help="Đường dẫn JSON chứa MultimodalMetadata[]")
-    parser.add_argument("--recreate", action="store_true", help="Xóa và tạo lại collection/index")
+    parser = argparse.ArgumentParser(
+        description="Phase 3 - Indexing pipeline (Milvus + Elasticsearch)"
+    )
+    parser.add_argument(
+        "--input", required=True, help="Đường dẫn JSON chứa MultimodalMetadata[]"
+    )
+    parser.add_argument(
+        "--recreate", action="store_true", help="Xóa và tạo lại collection/index"
+    )
     args = parser.parse_args()
 
     records = load_metadata(args.input)
-    logger.info("Đã load %d bản ghi MultimodalMetadata từ %s", len(records), args.input)
+    logger.info(
+        "Đã load %d bản ghi MultimodalMetadata từ %s",
+        len(records),
+        args.input,
+    )
 
     report = run_pipeline(records, recreate=args.recreate)
     json.dump(report, sys.stdout, ensure_ascii=False, indent=2)

@@ -1,4 +1,4 @@
-"""Phase 3: Dense/sparse indexing placeholders.
+"""
 milvus_indexer.py
 ==================
 Phase 3 - Indexing Module (Member 3 - Backend & DB Administrator)
@@ -7,13 +7,6 @@ Chịu trách nhiệm:
     - Tạo Milvus collection với `keyframe_id` là khóa chính (VARCHAR).
     - Build HNSW index trên trường dense_vector để ANN search siêu tốc.
     - Nạp dense vectors (SigLIP2/BEiT-3) từ `MultimodalMetadata`.
-
-Thiết kế:
-    Client `pymilvus` thật được import LAZY (chỉ khi thực sự kết nối tới
-    Milvus), để module này:
-      1) import được ngay cả khi chưa cài `pymilvus` trong môi trường dev/CI.
-      2) test được bằng cách inject một fake collection object (xem
-         tests/fakes.py) mà không cần một Milvus server thật.
 """
 from __future__ import annotations
 
@@ -33,17 +26,10 @@ class MilvusIndexer:
     VECTOR_FIELD = "dense_vector"
 
     def __init__(self, cfg: Optional[MilvusConfig] = None, client=None):
-        """
-        Args:
-            cfg: MilvusConfig. Mặc định đọc từ biến môi trường.
-            client: (test-only) một object giả lập Collection của pymilvus.
-                Khi được cung cấp, mọi thao tác sẽ dùng object này thay vì
-                kết nối Milvus thật -> cho phép unit test không cần server.
-        """
         self.cfg = cfg or MilvusConfig()
         self._collection = None
         self._injected_client = client
-        self._loaded = False  # theo dõi trạng thái đã load() lên memory hay chưa
+        self._loaded = False
 
     # ------------------------------------------------------------------ #
     # Kết nối & khởi tạo schema
@@ -55,7 +41,11 @@ class MilvusIndexer:
 
         from pymilvus import connections
 
-        connections.connect(alias="default", host=self.cfg.host, port=self.cfg.port)
+        connections.connect(
+            alias="default",
+            host=self.cfg.host,
+            port=self.cfg.port,
+        )
         logger.info("Đã kết nối Milvus tại %s:%s", self.cfg.host, self.cfg.port)
 
     def create_collection(self, recreate: bool = False):
@@ -66,7 +56,13 @@ class MilvusIndexer:
                 self._collection.drop()
             return self._collection
 
-        from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, utility
+        from pymilvus import (
+            Collection,
+            CollectionSchema,
+            DataType,
+            FieldSchema,
+            utility,
+        )
 
         if utility.has_collection(self.cfg.collection_name):
             if recreate:
@@ -91,47 +87,47 @@ class MilvusIndexer:
         ]
         schema = CollectionSchema(
             fields=fields,
-            description="Dense vectors (SigLIP2/BEiT-3) cho video keyframes",
+            description="Dense vectors cho video keyframes",
         )
-        self._collection = Collection(name=self.cfg.collection_name, schema=schema)
+        self._collection = Collection(
+            name=self.cfg.collection_name, schema=schema
+        )
         logger.info(
-            "Đã tạo collection '%s' (dim=%d).", self.cfg.collection_name, self.cfg.vector_dim
+            "Đã tạo collection '%s' (dim=%d).",
+            self.cfg.collection_name,
+            self.cfg.vector_dim,
         )
         return self._collection
 
     def build_index(self) -> None:
-        """Tạo HNSW index trên trường vector (M, efConstruction cấu hình được)."""
+        """Tạo HNSW index trên trường vector."""
         index_params = {
-            "index_type": self.cfg.index_type,  # "HNSW"
-            "metric_type": self.cfg.metric_type,  # "COSINE" | "IP" | "L2"
+            "index_type": self.cfg.index_type,
+            "metric_type": self.cfg.metric_type,
             "params": {
                 "M": self.cfg.hnsw_m,
                 "efConstruction": self.cfg.hnsw_ef_construction,
             },
         }
         if self._collection is None:
-            raise RuntimeError("Gọi create_collection() trước khi build_index().")
-        self._collection.create_index(field_name=self.VECTOR_FIELD, index_params=index_params)
+            raise RuntimeError(
+                "Gọi create_collection() trước khi build_index()."
+            )
+        self._collection.create_index(
+            field_name=self.VECTOR_FIELD, index_params=index_params
+        )
         logger.info("Đã build HNSW index: %s", index_params)
 
     # ------------------------------------------------------------------ #
     # Nạp dữ liệu
     # ------------------------------------------------------------------ #
     def insert(self, records: Sequence[MultimodalMetadata]) -> int:
-        """
-        Nạp danh sách MultimodalMetadata vào Milvus. Trả về số bản ghi đã insert.
-
-        LƯU Ý: hàm này KHÔNG tự động gọi flush(). Nếu dữ liệu được nạp theo
-        nhiều batch (thường gặp với dataset lớn), gọi flush() sau MỖI batch
-        sẽ ép Milvus seal nhiều segment nhỏ (small segments), làm tăng chi
-        phí compaction và giảm hiệu năng truy vấn. Hãy gọi `flush()` một
-        lần duy nhất sau khi toàn bộ batch đã được insert xong (xem
-        `index_data.run_pipeline`).
-        """
         if not records:
             return 0
         if self._collection is None:
-            raise RuntimeError("Collection chưa được khởi tạo. Gọi create_collection() trước.")
+            raise RuntimeError(
+                "Collection chưa được khởi tạo. Gọi create_collection() trước."
+            )
 
         self._validate_dim(records)
 
@@ -143,17 +139,11 @@ class MilvusIndexer:
         return len(ids)
 
     def flush(self) -> None:
-        """
-        Seal dữ liệu đã insert xuống segment persistent. Chỉ nên gọi MỘT
-        LẦN sau khi toàn bộ batch của một lượt nạp đã insert xong, không
-        gọi sau mỗi batch để tránh tạo nhiều segment nhỏ.
-        """
         if self._collection is not None and hasattr(self._collection, "flush"):
             self._collection.flush()
             logger.info("Đã flush collection '%s'.", self.cfg.collection_name)
 
     def load(self) -> None:
-        """Load collection lên memory để sẵn sàng phục vụ truy vấn (Phase 4)."""
         if self._collection is not None and hasattr(self._collection, "load"):
             self._collection.load()
         self._loaded = True
@@ -164,16 +154,6 @@ class MilvusIndexer:
         return self._collection.num_entities
 
     def get_all_ids(self, batch_size: int = 10000) -> List[str]:
-        """
-        Tiện ích cho test/verify (đối chiếu keyframe_id với Elasticsearch ở
-        quy mô nhỏ/vừa): lấy toàn bộ keyframe_id đã index.
-
-        `query()` của Milvus mặc định giới hạn số bản ghi trả về một lần gọi
-        (~16384). Với dataset lớn (hàng trăm nghìn/hàng triệu keyframe), hàm
-        này phân trang bằng `offset`/`limit` để không bị thiếu dữ liệu. Tuy
-        nhiên với dataset thực sự lớn, nên dùng `query_iterator` của pymilvus
-        hoặc chỉ chạy verify này trên một mẫu (sample) thay vì toàn bộ.
-        """
         if self._collection is None:
             return []
 
@@ -194,17 +174,15 @@ class MilvusIndexer:
             offset += batch_size
         return all_ids
 
-    def search(self, query_vector: List[float], top_k: int = 10, ef: Optional[int] = None):
-        """
-        ANN search - phục vụ Phase 4 (Retrieval & Alignment Module).
-
-        Tự động gọi load() nếu collection chưa được load lên memory, để
-        tránh lỗi "collection not loaded" từ phía Milvus server khi người
-        dùng quên gọi load() trước.
-        """
+    def search(
+        self,
+        query_vector: List[float],
+        top_k: int = 10,
+        ef: Optional[int] = None,
+    ):
         if not self._loaded:
             logger.warning(
-                "Collection '%s' chưa được load() — tự động load trước khi search.",
+                "Collection '%s' chưa được load() — tự động load trước.",
                 self.cfg.collection_name,
             )
             self.load()
@@ -226,8 +204,9 @@ class MilvusIndexer:
         for r in records:
             if len(r.dense_vector) != self.cfg.vector_dim:
                 raise ValueError(
-                    f"keyframe_id={r.keyframe_id}: dense_vector có {len(r.dense_vector)} "
-                    f"chiều, kỳ vọng {self.cfg.vector_dim} (xem MilvusConfig.vector_dim)."
+                    f"keyframe_id={r.keyframe_id}: dense_vector có "
+                    f"{len(r.dense_vector)} chiều, kỳ vọng "
+                    f"{self.cfg.vector_dim} (xem MilvusConfig.vector_dim)."
                 )
 
     def close(self) -> None:
@@ -236,4 +215,3 @@ class MilvusIndexer:
         from pymilvus import connections
 
         connections.disconnect("default")
-        

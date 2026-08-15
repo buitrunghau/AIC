@@ -1,36 +1,3 @@
-"""Phase 3: Elasticsearch indexer for sparse/text (OCR) data.
-
-Deliverable: elastic_indexer.py
-- Creates Elasticsearch index with fields: keyframe_id, video_id, ocr_text.
-- Configures BM25 analyzer with Vietnamese/English language support.
-- Indexes MultimodalMetadata.ocr_text for exact lexical matching.
-elastic_indexer.py
-===================
-Phase 3 - Indexing Module (Member 3 - Backend & DB Administrator)
-
-Chịu trách nhiệm:
-    - Tạo Elasticsearch index với `keyframe_id` (keyword) + `ocr_text` /
-      `asr_transcript` (text).
-    - Cấu hình analyzer song ngữ Việt/Anh + similarity BM25 (k1, b tùy chỉnh).
-    - Nạp dữ liệu văn bản thị giác (OCR) và thoại (ASR) qua bulk API.
-
-Ghi chú về analyzer tiếng Việt:
-    Elasticsearch KHÔNG có analyzer "vietnamese" built-in (không nằm trong
-    danh sách language analyzer mặc định). Vì tiếng Việt dùng ký tự Latin
-    có dấu và phân tách bằng khoảng trắng ở cấp âm tiết, ta dùng:
-      - `standard` tokenizer (tách theo khoảng trắng/dấu câu, hoạt động ổn
-        cho cả tiếng Việt lẫn tiếng Anh).
-      - `lowercase` + stopword filter riêng cho vi/en.
-      - Một sub-field `.folded` dùng `asciifolding` để hỗ trợ tìm kiếm
-        không dấu (UX phổ biến khi người dùng gõ tiếng Việt không dấu).
-    Nếu cần tách từ ghép tiếng Việt chính xác hơn (ví dụ "bệnh viện" là 1
-    từ chứ không phải 2 âm tiết rời), nên tiền xử lý bằng underthesea/pyvi
-    ở Phase 2 trước khi đưa `ocr_text` sang đây, hoặc cài plugin ICU.
-
-Thiết kế:
-    Client `elasticsearch` thật và hàm `bulk()` được inject được (dependency
-    injection) để unit test không cần một Elasticsearch server thật.
-"""
 """
 elastic_indexer.py
 ===================
@@ -41,23 +8,6 @@ Chịu trách nhiệm:
       `asr_transcript` (text).
     - Cấu hình analyzer song ngữ Việt/Anh + similarity BM25 (k1, b tùy chỉnh).
     - Nạp dữ liệu văn bản thị giác (OCR) và thoại (ASR) qua bulk API.
-
-Ghi chú về analyzer tiếng Việt:
-    Elasticsearch KHÔNG có analyzer "vietnamese" built-in (không nằm trong
-    danh sách language analyzer mặc định). Vì tiếng Việt dùng ký tự Latin
-    có dấu và phân tách bằng khoảng trắng ở cấp âm tiết, ta dùng:
-      - `standard` tokenizer (tách theo khoảng trắng/dấu câu, hoạt động ổn
-        cho cả tiếng Việt lẫn tiếng Anh).
-      - `lowercase` + stopword filter riêng cho vi/en.
-      - Một sub-field `.folded` dùng `asciifolding` để hỗ trợ tìm kiếm
-        không dấu (UX phổ biến khi người dùng gõ tiếng Việt không dấu).
-    Nếu cần tách từ ghép tiếng Việt chính xác hơn (ví dụ "bệnh viện" là 1
-    từ chứ không phải 2 âm tiết rời), nên tiền xử lý bằng underthesea/pyvi
-    ở Phase 2 trước khi đưa `ocr_text` sang đây, hoặc cài plugin ICU.
-
-Thiết kế:
-    Client `elasticsearch` thật và hàm `bulk()` được inject được (dependency
-    injection) để unit test không cần một Elasticsearch server thật.
 """
 from __future__ import annotations
 
@@ -69,7 +19,6 @@ from contracts import MultimodalMetadata
 
 logger = logging.getLogger(__name__)
 
-# Stopwords tối giản cho tiếng Việt - có thể mở rộng thêm theo domain dữ liệu.
 VI_STOPWORDS = [
     "và", "là", "của", "có", "được", "trong", "đã", "cho", "một",
     "những", "các", "này", "đó", "với", "để", "khi", "không", "về",
@@ -77,7 +26,7 @@ VI_STOPWORDS = [
 
 
 class ElasticIndexer:
-    """Quản lý Elasticsearch index cho dữ liệu văn bản thị giác/thoại (OCR/ASR)."""
+    """Quản lý Elasticsearch index cho dữ liệu văn bản thị giác/thoại."""
 
     def __init__(
         self,
@@ -85,14 +34,6 @@ class ElasticIndexer:
         client: Any = None,
         bulk_fn: Any = None,
     ):
-        """
-        Args:
-            cfg: ElasticConfig. Mặc định đọc từ biến môi trường.
-            client: (test-only) fake Elasticsearch client. Khi cung cấp,
-                mọi thao tác dùng object này thay vì kết nối ES thật.
-            bulk_fn: (test-only) fake thay thế cho `elasticsearch.helpers.bulk`,
-                chữ ký `fn(client, actions, refresh=True) -> (success, errors)`.
-        """
         self.cfg = cfg or ElasticConfig()
         self._client = client
         self._bulk_fn = bulk_fn
@@ -164,7 +105,10 @@ class ElasticIndexer:
                         "analyzer": "vi_en_analyzer",
                         "similarity": "vi_bm25",
                         "fields": {
-                            "folded": {"type": "text", "analyzer": "vi_en_folded_analyzer"}
+                            "folded": {
+                                "type": "text",
+                                "analyzer": "vi_en_folded_analyzer",
+                            }
                         },
                     },
                     "asr_transcript": {
@@ -172,7 +116,10 @@ class ElasticIndexer:
                         "analyzer": "vi_en_analyzer",
                         "similarity": "vi_bm25",
                         "fields": {
-                            "folded": {"type": "text", "analyzer": "vi_en_folded_analyzer"}
+                            "folded": {
+                                "type": "text",
+                                "analyzer": "vi_en_folded_analyzer",
+                            }
                         },
                     },
                 }
@@ -184,17 +131,6 @@ class ElasticIndexer:
 
     # ------------------------------------------------------------------ #
     def insert(self, records: Sequence[MultimodalMetadata]) -> int:
-        """
-        Nạp danh sách MultimodalMetadata vào Elasticsearch qua bulk API.
-
-        LƯU Ý: hàm này KHÔNG refresh index sau mỗi lần gọi (refresh=False).
-        Nếu dữ liệu được nạp theo nhiều batch, gọi refresh sau MỖI batch sẽ
-        ép Elasticsearch commit segment liên tục xuống đĩa, làm chậm tốc độ
-        nạp đáng kể. Hãy gọi `refresh()` một lần duy nhất sau khi toàn bộ
-        batch đã insert xong (xem `index_data.run_pipeline`). Elasticsearch
-        vẫn tự refresh theo chu kỳ mặc định (1s) nên dữ liệu sẽ khả kiến
-        (searchable) sau đó ít lâu dù không gọi refresh thủ công.
-        """
         if not records:
             return 0
         if self._client is None:
@@ -203,8 +139,6 @@ class ElasticIndexer:
         actions = [
             {
                 "_index": self.cfg.index_name,
-                # Dùng keyframe_id làm _id -> đồng bộ 1-1 với Milvus PK,
-                # tránh sinh ID ngẫu nhiên gây lệch giữa 2 hệ thống.
                 "_id": r.keyframe_id,
                 "_source": {
                     "keyframe_id": r.keyframe_id,
@@ -219,18 +153,17 @@ class ElasticIndexer:
         success, errors = bulk_fn(self._client, actions, refresh=False)
         if errors:
             logger.warning("Elasticsearch bulk insert có %d lỗi.", len(errors))
-        logger.info("Đã insert %d document vào Elasticsearch (chưa refresh).", success)
+        logger.info(
+            "Đã insert %d document vào Elasticsearch (chưa refresh).", success
+        )
         return success
 
     def refresh(self) -> None:
-        """
-        Refresh index để dữ liệu vừa insert khả kiến (searchable) ngay lập
-        tức. Chỉ nên gọi MỘT LẦN sau khi toàn bộ batch của một lượt nạp đã
-        insert xong, không gọi sau mỗi batch để tránh commit segment liên tục.
-        """
         if self._client is None:
             self.connect()
-        if hasattr(self._client, "indices") and hasattr(self._client.indices, "refresh"):
+        if hasattr(self._client, "indices") and hasattr(
+            self._client.indices, "refresh"
+        ):
             self._client.indices.refresh(index=self.cfg.index_name)
             logger.info("Đã refresh index '%s'.", self.cfg.index_name)
 
@@ -242,17 +175,9 @@ class ElasticIndexer:
             return result.get("count", 0)
         return getattr(result, "count", 0)
 
-    def get_all_ids(self, page_size: int = 5000, scroll_ttl: str = "2m") -> List[str]:
-        """
-        Tiện ích cho test/verify (đối chiếu keyframe_id với Milvus): lấy
-        toàn bộ keyframe_id đã index.
-
-        Elasticsearch chặn truy vấn `search(size=...)` vượt quá
-        `index.max_result_window` (mặc định 10000) — dùng `size=10000` như
-        trước đây là chạm ngay ngưỡng này và sẽ lỗi/thiếu dữ liệu khi kho
-        video có trên 10.000 keyframe. Vì vậy hàm này dùng Scroll API để
-        duyệt hết toàn bộ document theo trang mà không bị giới hạn đó.
-        """
+    def get_all_ids(
+        self, page_size: int = 5000, scroll_ttl: str = "2m"
+    ) -> List[str]:
         if self._client is None:
             self.connect()
         if hasattr(self._client, "get_all_ids"):
@@ -279,30 +204,19 @@ class ElasticIndexer:
         return all_ids
 
     def get_document(self, keyframe_id: str):
-        """Lấy 1 document theo keyframe_id (tiện ích cho test/verify)."""
         if self._client is None:
             self.connect()
         if hasattr(self._client, "docs"):
-            return self._client.docs.get(self.cfg.index_name, {}).get(keyframe_id)
+            return self._client.docs.get(self.cfg.index_name, {}).get(
+                keyframe_id
+            )
         resp = self._client.get(index=self.cfg.index_name, id=keyframe_id)
-        return resp.get("_source") if isinstance(resp, dict) else resp["_source"]
+        return (
+            resp.get("_source") if isinstance(resp, dict) else resp["_source"]
+        )
 
     # ------------------------------------------------------------------ #
     def search(self, query_text: str, top_k: int = 10):
-        """
-        BM25 lexical search - phục vụ Phase 4 (Retrieval & Alignment Module),
-        cụ thể là nhánh sparse/text của WRRF (Weighted Reciprocal Rank
-        Fusion) khi hợp nhất với kết quả dense-vector từ Milvus.
-
-        Truy vấn `multi_match` qua cả `ocr_text`/`asr_transcript` (bản có
-        dấu, đã qua stopword filter) lẫn subfield `.folded` (bản không dấu,
-        hỗ trợ người dùng gõ tiếng Việt không dấu). Field có dấu được boost
-        cao hơn vì mang ngữ nghĩa chính xác hơn field folded.
-
-        Returns:
-            List[dict] dạng [{"keyframe_id": ..., "score": ...}, ...],
-            sắp xếp giảm dần theo BM25 score.
-        """
         if self._client is None:
             self.connect()
 
@@ -321,12 +235,22 @@ class ElasticIndexer:
             },
             "_source": ["keyframe_id"],
         }
-        resp = self._client.search(index=self.cfg.index_name, body=body, size=top_k)
-        hits = resp["hits"]["hits"] if isinstance(resp, dict) else resp.hits.hits
+        resp = self._client.search(
+            index=self.cfg.index_name, body=body, size=top_k
+        )
+        hits = (
+            resp["hits"]["hits"]
+            if isinstance(resp, dict)
+            else resp.hits.hits
+        )
         return [
             {
                 "keyframe_id": h["_source"]["keyframe_id"],
-                "score": h.get("_score", 0.0) if isinstance(h, dict) else h._score,
+                "score": (
+                    h.get("_score", 0.0)
+                    if isinstance(h, dict)
+                    else h._score
+                ),
             }
             for h in hits
         ]
