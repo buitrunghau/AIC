@@ -41,7 +41,7 @@ class FakeMilvusCollection:
     def query(self, expr=None, output_fields=None, limit=None, offset=0):
         """Giả lập phân trang offset/limit giống pymilvus.Collection.query."""
         ids = list(self.records.keys())
-        sliced = ids[offset:] if limit is None else ids[offset : offset + limit]
+        sliced = ids[offset:] if limit is None else ids[offset: offset + limit]
         return [{"keyframe_id": kid} for kid in sliced]
 
     def search(self, data, anns_field, param, limit, output_fields):
