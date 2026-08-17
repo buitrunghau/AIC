@@ -17,7 +17,7 @@ import os
 import json
 import logging
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 # (Đã chuyển import google.genai vào lazy bên trong APIEventSegmenter để tránh vỡ code khi thiếu thư viện)
 
@@ -34,6 +34,7 @@ _event_cache: Dict[str, List[str]] = {}
 # ══════════════════════════════════════════════════════════════════════
 # 1. API EVENT SEGMENTER (NEW GOOGLE GENAI SDK)
 # ══════════════════════════════════════════════════════════════════════
+
 
 class APIEventSegmenter:
     def __init__(self):
@@ -59,7 +60,7 @@ class APIEventSegmenter:
         2. BẮT BUỘC: Mỗi sự kiện phải là chuỗi con (exact substring) cắt trực tiếp từ câu gốc.
         3. KHÔNG đưa các từ nối (như: sau đó, rồi, tiếp theo, kế tiếp, lập tức) vào đầu chuỗi sự kiện.
         4. CHỈ trả về ĐÚNG 1 mảng JSON, KHÔNG giải thích, KHÔNG bọc trong markdown.
-        
+
         Ví dụ Input: "Xe máy phanh gấp, sau đó ngã ra đường."
         Output: ["Xe máy phanh gấp,", "ngã ra đường."]
         """
@@ -94,7 +95,10 @@ class APIEventSegmenter:
             logger.error(f"Lỗi khi gọi API: {e}. Đang dùng câu gốc làm fallback.")
             return [query]
 
+
 _segmenter_instance = None
+
+
 def get_api_segmenter():
     global _segmenter_instance
     if _segmenter_instance is None:
@@ -104,6 +108,7 @@ def get_api_segmenter():
 # ══════════════════════════════════════════════════════════════════════
 # 2. XỬ LÝ NGÔN NGỮ (TIỀN XỬ LÝ QUERY)
 # ══════════════════════════════════════════════════════════════════════
+
 
 def clean_query_for_dbs(query: str, query_type: str):
     noise_prefixes = [r"^tìm video( về)?", r"^hãy cho tôi biết", r"^tìm kiếm", r"^đoạn clip nào", r"^hình ảnh"]
@@ -123,6 +128,7 @@ def clean_query_for_dbs(query: str, query_type: str):
 
     return milvus_query, es_query
 
+
 def split_qa_query(query: str):
     if "?" in query:
         idx = query.index("?")
@@ -138,6 +144,7 @@ def split_qa_query(query: str):
 # ══════════════════════════════════════════════════════════════════════
 # 3. QUẢN LÝ CACHE CHO TRAKE
 # ══════════════════════════════════════════════════════════════════════
+
 
 def parse_trake_events(query: str, use_cache: bool = True, cache_file: str = "event_cache.json") -> List[str]:
     if use_cache and query in _event_cache:
@@ -173,6 +180,7 @@ def parse_trake_events(query: str, use_cache: bool = True, cache_file: str = "ev
 # ══════════════════════════════════════════════════════════════════════
 # 4. HÀM TÌM KIẾM CỐT LÕI (ENTRY POINT)
 # ══════════════════════════════════════════════════════════════════════
+
 
 def search(query_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     query_text = query_payload.get("query", "")
