@@ -28,7 +28,6 @@ Hỗ trợ 3 loại truy vấn chính:
 - [Cấu trúc thư mục](#cấu-trúc-thư-mục)
 - [Quyết định thiết kế & Trade-offs](#quyết-định-thiết-kế--trade-offs)
 - [Đóng góp](#đóng-góp)
-- [License](#license)
 
 ---
 
@@ -485,7 +484,3 @@ Tự động tạo file `submission.zip` chuẩn CodaBench.
 5. Tạo Pull Request.
 
 ---
-
-## License
-
-Dự án được phân phối dưới giấy phép MIT. Xem file `LICENSE` để biết thêm chi tiết.
