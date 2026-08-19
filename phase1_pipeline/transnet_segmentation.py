@@ -348,48 +348,40 @@ class ShotBoundaryDetector:
 
     def detect_boundaries(self, frames: np.ndarray, threshold: float = 0.5) -> List[float]:
         """
-        Detect shot boundaries in frames.
-        
-        Args:
-            frames: Array of shape (T, 27, 48, 3) in uint8 RGB format
-            threshold: Sigmoid threshold to classify as boundary
-            
-        Returns:
-            List of frame indices where boundaries occur
+        Detect shot boundaries in frames with low memory footprint.
         """
-        with torch.no_grad():
+        with torch.inference_mode():
             t = frames.shape[0]
-            
+            if t == 0:
+                return []
+
             if t < 100:
-                input_tensor = torch.from_numpy(frames).unsqueeze(0).to(self.device)
+                padded = np.pad(frames, ((0, 100 - t), (0, 0), (0, 0), (0, 0)), mode='edge') if t < 100 else frames
+                input_tensor = torch.from_numpy(padded).unsqueeze(0).to(self.device)
                 predictions = self.model(input_tensor)
-                
-                if isinstance(predictions, tuple):
-                    one_hot = predictions[0]
-                else:
-                    one_hot = predictions
-                
-                probs = torch.sigmoid(one_hot).squeeze().cpu().numpy()
+                one_hot = predictions[0] if isinstance(predictions, tuple) else predictions
+                probs = torch.sigmoid(one_hot).squeeze().cpu().numpy()[:t]
+                del input_tensor, predictions
             else:
                 probs = []
                 for i in range(0, t - 99, 50):
-                    chunk = frames[i:i+100]
+                    chunk = frames[i:i + 100]
                     if len(chunk) < 100:
-                        chunk = np.pad(chunk, ((0, 100-len(chunk)), (0, 0), (0, 0), (0, 0)), mode='edge')
-                    
+                        chunk = np.pad(chunk, ((0, 100 - len(chunk)), (0, 0), (0, 0), (0, 0)), mode='edge')
+
                     input_tensor = torch.from_numpy(chunk).unsqueeze(0).to(self.device)
                     predictions = self.model(input_tensor)
-                    
-                    if isinstance(predictions, tuple):
-                        one_hot = predictions[0]
-                    else:
-                        one_hot = predictions
-                    
+                    one_hot = predictions[0] if isinstance(predictions, tuple) else predictions
                     chunk_probs = torch.sigmoid(one_hot).squeeze().cpu().numpy()
-                    probs.append(chunk_probs[:len(frames[i:i+100])])
-                
+
+                    probs.append(chunk_probs[:len(frames[i:i + 100])])
+                    del input_tensor, predictions
+
                 probs = np.concatenate(probs, axis=0)[:t]
-            
+
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
+
             boundaries = np.where(probs.flatten() > threshold)[0].tolist()
             return boundaries
 
