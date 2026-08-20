@@ -346,55 +346,73 @@ class ShotBoundaryDetector:
         state_dict = torch.load(model_path, map_location=device)
         self.model.load_state_dict(state_dict)
 
-    def detect_boundaries(self, frames: np.ndarray, threshold: float = 0.5) -> List[float]:
+    def detect_boundaries(self, frames: np.ndarray, threshold: float = 0.5, batch_size: int = 64) -> List[float]:
         """
-        Detect shot boundaries in frames with low memory footprint.
+        Detect shot boundaries with GPU Batching Optimization.
         """
         with torch.inference_mode():
             t = frames.shape[0]
             if t == 0:
                 return []
 
-            if t < 100:
-                padded = np.pad(frames, ((0, 100 - t), (0, 0), (0, 0), (0, 0)), mode='edge') if t < 100 else frames
-                input_tensor = torch.from_numpy(padded).unsqueeze(0).to(self.device)
+            step = 50
+            window = 100
+            chunks = []
+            
+            # 1. Tiền xử lý: Cắt toàn bộ video thành các khối 100 frames trên CPU
+            for i in range(0, t, step):
+                chunk = frames[i : i + window]
+                # Đệm thêm frame nếu khối cuối cùng bị thiếu (nhỏ hơn 100)
+                if len(chunk) < window:
+                    chunk = np.pad(chunk, ((0, window - len(chunk)), (0, 0), (0, 0), (0, 0)), mode='edge')
+                chunks.append(chunk)
+                
+            if not chunks:
+                return []
+                
+            # Chuyển đổi thành NumPy array có shape: [N_chunks, 100, 27, 48, 3]
+            chunks_np = np.array(chunks)
+            probs = []
+            
+            # 2. Tối ưu GPU: Đẩy dữ liệu qua model theo từng Lô (Batch)
+            for i in range(0, len(chunks_np), batch_size):
+                batch = chunks_np[i : i + batch_size]
+                input_tensor = torch.from_numpy(batch).to(self.device)
+                
+                # Gọi TransNetV2 xử lý song song toàn bộ batch
                 predictions = self.model(input_tensor)
                 one_hot = predictions[0] if isinstance(predictions, tuple) else predictions
-                probs = torch.sigmoid(one_hot).squeeze().cpu().numpy()[:t]
-                del input_tensor, predictions
-            else:
-                probs = []
-                for i in range(0, t - 99, 50):
-                    chunk = frames[i:i + 100]
-                    if len(chunk) < 100:
-                        chunk = np.pad(chunk, ((0, 100 - len(chunk)), (0, 0), (0, 0), (0, 0)), mode='edge')
-
-                    input_tensor = torch.from_numpy(chunk).unsqueeze(0).to(self.device)
-                    predictions = self.model(input_tensor)
-                    one_hot = predictions[0] if isinstance(predictions, tuple) else predictions
-                    chunk_probs = torch.sigmoid(one_hot).squeeze().cpu().numpy()
-
-                    probs.append(chunk_probs[:len(frames[i:i + 100])])
-                    del input_tensor, predictions
-
-                probs = np.concatenate(probs, axis=0)[:t]
-
+                
+                # squeeze(-1) để loại bỏ chiều cuối, giữ lại shape [Batch_size, 100]
+                batch_probs = torch.sigmoid(one_hot).squeeze(-1).cpu().numpy()
+                
+                # Đảm bảo list không bị mất chiều nếu batch_size = 1
+                if batch_probs.ndim == 1:
+                    batch_probs = np.expand_dims(batch_probs, axis=0)
+                
+                # 3. Lắp ghép kết quả chống trùng lặp (Overlap handling)
+                for j in range(len(batch)):
+                    chunk_idx = i + j
+                    if chunk_idx == 0:
+                        # Chunk đầu tiên: lấy toàn bộ 100 frames
+                        probs.append(batch_probs[j])
+                    else:
+                        # Các chunk sau: bỏ qua 50 frames đầu (đã có ở chunk trước), chỉ lấy phần mới
+                        probs.append(batch_probs[j, step:])
+                        
+            # Gộp lại và cắt bỏ đi phần đệm dư thừa của khối cuối cùng
+            probs = np.concatenate(probs, axis=0)[:t]
+            
             if self.device == "cuda":
                 torch.cuda.empty_cache()
 
-            boundaries = np.where(probs.flatten() > threshold)[0].tolist()
+            # Lọc ra các frame có xác suất cao hơn ngưỡng threshold
+            boundaries = np.where(probs > threshold)[0].tolist()
             return boundaries
 
     def segment_video(self, frames: np.ndarray, threshold: float = 0.5) -> List[Tuple[int, int]]:
         """
         Segment video into shots.
-        
-        Args:
-            frames: Array of shape (T, 27, 48, 3)
-            threshold: Boundary detection threshold
-            
-        Returns:
-            List of (start_frame, end_frame) tuples
         """
         boundaries = self.detect_boundaries(frames, threshold)
         
